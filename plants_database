@@ -9,11 +9,33 @@ CREATE TABLE plants (
 );
 
 -- Insert rows of data into the plants table
-INSERT INTO plants (id, name, species, type, min_dli, max_dli) 
+INSERT INTO plants (id, name, type, min_dli, max_dli) 
 VALUES 
-(1, 'Rose', 'Rosa', 'Flower', 100, 200),
-(2, 'Sunflower', 'Helianthus', 'Flower', 150, 250),
-(3, 'Cactus', 'Cactaceae', 'Succulent', 50, 100);
+(1, 'African Violets', 'Flower', 4, 14),
+(2, 'Aglaonema', 'Flower', 4, 14),
+(3, 'Alocasia', 'Flower', 4, 14),
+(4, 'Aloe Vera', 'Succulent/Cactus', 4, 14),
+(5, 'Amaryllis', 'Flower', 4, 14),
+(6, 'Anthurium', 'Flower', 4, 14),
+(7, 'Aspidistra', 'Houseplant', 4, 18),
+(8, 'Basil', 'Herb', 12, 26),
+(9, 'Blackberry', 'Flower', 8, 14),
+(10, 'Blueberry', 'Flower', 14, 24),
+(11, 'Broccoli', 'Flower', 15, 35),
+(12, 'Bromeliad', 'Flower', 4, 14),
+(13, 'Cactus', 'Succulent/Cactus', 20, 25),
+(14, 'Cannabis (Short-Day Flowering)', 'Flower', 30, 40),
+(15, 'Cannabis (Seedling)', 'Herb', 12, 16),
+(16, 'Cannabis (Vegetative)', 'Herb', 20, 45),
+(17, 'Chrysanthemums', 'Flower', 10, 14),
+(18, 'Cilantro', 'Herb', 20, 28),
+(19, 'Citrus (Various)', 'Herb', 20, 28),
+(20, 'Croton', 'Houseplant', 4, 16),
+(21, 'Cucumber', 'Flower', 20, 30),
+(22, 'Cucumbers (Seedling)', 'Flower', 5, 15),
+(23, 'Culinary Herbs (Small)', 'Herbs', 10, 12),
+(24, 'Cyclamen', 'Flower', 6, 8),
+(25, 'Desert Cacti', 'Succulent/Cactus', 9, 30);
 
 -- Verify the data was added
 SELECT * FROM plants;
@@ -28,7 +50,33 @@ CREATE TABLE types (
 INSERT INTO types (type_name, photoperiod) 
 VALUES 
 ('Flower', 12),
-('Succulent', 14);
+('Shade Houseplant', 12),
+('Succulent/Cactus', 14),
+('Houseplant', 14),
+('Herb', 16),
+('Leafy Green', 16);
 
 -- Verify the data was added
 SELECT * FROM types;
+
+-- Create the stages table
+CREATE TABLE stages (
+    stage_name VARCHAR(15) PRIMARY KEY,
+    photoperiod INT
+);
+
+-- Insert rows of data into the stages table
+INSERT INTO stages (stage_name, photoperiod) 
+VALUES 
+('Seedling', 18),
+('Vegetative', 18),
+('Pre-Flowering', 14),
+('Short-Day Flowering', 12),
+('Long-Day Flowering', 16),
+('Fruiting', 12),
+('Dormant', 10),
+('Germination', 18),
+('Mature/Active/Default', null);
+
+-- Verify the data was added
+SELECT * FROM stages;
