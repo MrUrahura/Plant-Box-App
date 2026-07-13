@@ -122,6 +122,12 @@ function autoDetectTz() {
     }
 }
 
+function setStatus(message, color = "#333") {
+    const statusDiv = document.getElementById("status");
+    statusDiv.innerText = message;
+    statusDiv.style.color = color;
+}
+
 function requestDeviceLocation(isManualClick = false) {
     const logDiv = document.getElementById('dataLog');
     if (navigator.geolocation) {
@@ -175,6 +181,9 @@ function populateDropdowns() {
             opt.textContent = row[0];
             stageSelect.appendChild(opt);
         });
+
+        // Set the default selection
+        stageSelect.value = "Mature/Active/Default";
     }
     
     calculateTargetSettings();
@@ -190,7 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const logDiv = document.getElementById('dataLog');
     
     try {
-        statusDiv.innerText = "Status: Linking WebAssembly Modules...";
+        setStatus("Status: Linking WebAssembly Modules...");
         
         // Point locateFile directly to the jsDelivr directory
         const config = { 
@@ -198,7 +207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
         
         const SQL = await initSqlJs(config);
-        statusDiv.innerText = "Status: Fetching plants_database.db File...";
+        setStatus("Status: Fetching plants_database.db File...");
         
         const response = await fetch('plants_database.db');
         if (!response.ok) throw new Error("File plants_database.db not found in active directory path.");
@@ -207,13 +216,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const uInt8Array = new Uint8Array(arrayBuffer);
         
         db = new SQL.Database(uInt8Array);
-        statusDiv.innerText = "Status: System Ready. Connect to Hardware.";
+        SetStatus("Status: System Ready. Connect to Hardware.");
         
         populateDropdowns();
     } catch (error) {
         console.error(error);
-        statusDiv.innerText = "Database Error: Loading Blocked";
-        statusDiv.style.color = "red";
+        setStatus("Database Error: Loading Blocked", "red");
         logDiv.innerHTML += `❌ Initialization Error: ${error.message}<br>`;
     }
 });
@@ -301,7 +309,7 @@ function calculateTargetSettings() {
 async function connectBLE() {
     const statusDiv = document.getElementById('status');
     const logDiv = document.getElementById('dataLog');
-    statusDiv.innerText = "Status: Scanning for ESP32 Link...";
+    setStatus("Status: Scanning for ESP32 Link...");
     
     try {
         bleDevice = await navigator.bluetooth.requestDevice({ 
@@ -309,7 +317,7 @@ async function connectBLE() {
         });
         
         const server = await bleDevice.gatt.connect();
-        statusDiv.innerText = "Status: Bluetooth Connected!";
+        setStatus("Status: Bluetooth Connected!", "green");
         statusDiv.style.color = "green";
         document.getElementById('syncBtn').disabled = false;
 
@@ -319,8 +327,7 @@ async function connectBLE() {
         logDiv.innerHTML += `Connected to peripheral device profiles stream.<br>`;
     } catch (error) {
         console.error(error);
-        statusDiv.innerText = "Status: Bluetooth Hook Connection Failed";
-        statusDiv.style.color = "red";
+        setStatus("Status: Bluetooth Hook Connection Failed", "red");
         logDiv.innerHTML += `Connection error matrix: ${error.message}<br>`;
     }
 }
