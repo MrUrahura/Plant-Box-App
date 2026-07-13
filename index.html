@@ -216,7 +216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const uInt8Array = new Uint8Array(arrayBuffer);
         
         db = new SQL.Database(uInt8Array);
-        SetStatus("Status: System Ready. Connect to Hardware.");
+        setStatus("Status: System Ready. Connect to Hardware.");
         
         populateDropdowns();
     } catch (error) {
@@ -319,7 +319,6 @@ async function connectBLE() {
         
         const server = await bleDevice.gatt.connect();
         setStatus("Status: Bluetooth Connected!", "green");
-        statusDiv.style.color = "green";
         document.getElementById('syncBtn').disabled = false;
 
         const service = await server.getPrimaryService(SERVICE_UUID);
@@ -368,8 +367,7 @@ async function syncToESP32() {
 function disconnectBLE() {
     if (bleDevice && bleDevice.gatt.connected) {
         bleDevice.gatt.disconnect();
-        document.getElementById('status').innerText = "Status: Disconnected";
-        document.getElementById('status').style.color = "black";
+        setStatus("Status: Disconnected");
         document.getElementById('syncBtn').disabled = true;
         document.getElementById('dataLog').innerHTML += "Connection closed by user configuration.<br>";
     }
