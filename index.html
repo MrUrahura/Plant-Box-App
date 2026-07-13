@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Controller & Plant Sync</title>
+    
+    <!-- Use a direct synchronous link to prevent loading blocks on separate devices -->
+    <script src="https://jsdelivr.net"></script>
+    
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f0f2f5; color: #333; }
+        .card { background: white; max-width: 500px; margin: 20px auto; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: left; }
+        h1, h2, h3 { text-align: center; margin-top: 5px; }
+        label { font-weight: bold; display: block; margin-top: 12px; margin-bottom: 4px; }
+        select, input, button { width: 100%; padding: 10px; font-size: 15px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 8px; box-sizing: border-box; }
+        button { cursor: pointer; border: none; font-weight: bold; margin-top: 5px; }
+        .connect { background: #0070f3; color: white; }
+        .disconnect { background: #ff0000; color: white; }
+        .sync { background: #28a745; color: white; margin-top: 15px; }
+        .sync:disabled { background: #6c757d; cursor: not-allowed; }
+        #status { font-weight: bold; text-align: center; margin: 10px 0; padding: 8px; border-radius: 6px; background: #eee; }
+        #preview { background: #eef7ed; padding: 15px; border-radius: 8px; border: 1px solid #c3e6cb; font-family: monospace; font-size: 13px; white-space: pre-wrap; margin-top: 15px; }
+        #dataLog { height: 100px; background: #fff; padding: 10px; border: 1px solid #ccc; overflow-y: scroll; font-family: monospace; font-size: 12px; margin-top: 15px; }
+        .row { display: flex; gap: 10px; }
+        .row > div { flex: 1; }
+        .auto-btn { background: #6f42c1; color: white; font-size: 12px; padding: 6px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>ESP32 Plant Sync Link</h1>
+
+    <div class="card">
+        <h2>1. Connection Status</h2>
+        <button class="connect" onclick="connectBLE()">Connect to ESP32</button>
+        <button class="disconnect" onclick="disconnectBLE()">Disconnect</button>
+        <div id="status">Status: Preparing Environment Setup...</div>
+    </div>
+
+    <div class="card">
+        <h2>2. System Configuration</h2>
+        
+        <label for="wifiSsid">WiFi SSID:</label>
+        <input type="text" id="wifiSsid" placeholder="Your WiFi Name" oninput="calculateTargetSettings()">
+
+        <label for="wifiPass">WiFi Password:</label>
+        <input type="password" id="wifiPass" placeholder="Your WiFi Password" oninput="calculateTargetSettings()">
+
+        <label for="weatherKey">WeatherAPI Key:</label>
+        <input type="text" id="weatherKey" placeholder="Paste WeatherAPI.com Key" oninput="calculateTargetSettings()">
+
+        <button class="auto-btn" onclick="requestDeviceLocation(true)">🔄 Force Refresh Auto-GPS</button>
+        <div class="row">
+            <div>
+                <label for="latitude">Latitude:</label>
+                <input type="number" id="latitude" step="any" placeholder="Auto-detecting..." oninput="calculateTargetSettings()">
+            </div>
+            <div>
+                <label for="longitude">Longitude:</label>
+                <input type="number" id="longitude" step="any" placeholder="Auto-detecting..." oninput="calculateTargetSettings()">
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <label for="timezone">Time Zone Code:</label>
+                <input type="text" id="timezone" placeholder="Auto-detecting..." oninput="calculateTargetSettings()">
+            </div>
+            <div>
+                <label for="startHour">Start Hour:</label>
+                <select id="startHour" onchange="calculateTargetSettings()">
+                    <!-- Populated dynamically below -->
+                </select>
+            </div>
+        </div>
+
+        <label for="plantSelect">Select Plant:</label>
+        <select id="plantSelect" onchange="calculateTargetSettings()"><option>Awaiting Database...</option></select>
+
+        <label for="stageSelect">Select Growth Stage:</label>
+        <select id="stageSelect" onchange="calculateTargetSettings()"><option>Awaiting Database...</option></select>
+
+        <h3>Final Transmission Payload Preview</h3>
+        <div id="preview">Awaiting database setup confirmation...</div>
+        
+        <button class="sync" id="syncBtn" onclick="syncToESP32()" disabled>Send Configuration to ESP32</button>
+        
+        <div id="dataLog">--- System Log ---<br></div>
+    </div>
+
+<script>
+const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+let db = null;
+let bleDevice = null;
+let bleCharacteristic = null;
+let finalPayload = null;
+
+let autoLat = 0.0;
+let autoLong = 0.0;
+let autoTz = "UTC";
+
+function initHourDropdown() {
+    const hourSelect = document.getElementById('startHour');
+    hourSelect.innerHTML = "";
+    for (let i = 0; i < 24; i++) {
+        let opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = i === 0 ? "12 AM (0)" : i === 12 ? "12 PM (12)" : i > 12 ? `${i-12} PM (${i})` : `${i} AM (${i})`;
+        hourSelect.appendChild(opt);
+    }
+}
+
+function autoDetectTz() {
+    try {
+        autoTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch(e) {
+        console.error("Failed to read device timezone metadata", e);
+    }
+}
+
+function requestDeviceLocation(isManualClick = false) {
+    const logDiv = document.getElementById('dataLog');
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                autoLat = position.coords.latitude;
+                autoLong = position.coords.longitude;
+                if (isManualClick) {
+                    logDiv.innerHTML += "✅ Automated background GPS parameters synced.<br>";
+                }
+                calculateTargetSettings();
+            },
+            (error) => {
+                if (isManualClick) {
+                    logDiv.innerHTML += `⚠️ Automated GPS verification failed: ${error.message}.<br>`;
+                }
+            }
+        );
+    }
+}
+
+function populateDropdowns() {
+    const plantSelect = document.getElementById('plantSelect');
+    const stageSelect = document.getElementById('stageSelect');
+    
+    plantSelect.innerHTML = "";
+    stageSelect.innerHTML = "";
+
+    const plantsResult = db.exec("SELECT id, name FROM plants ORDER BY name ASC;");
+    if (plantsResult.length > 0 && plantsResult.values) {
+        plantsResult.values.forEach(row => {
+            let opt = document.createElement('option');
+            opt.value = row[0]; // database 'id' integer key
+            opt.textContent = row[1]; // database 'name' string
+            plantSelect.appendChild(opt);
+        });
+    }
+
+    const stagesResult = db.exec("SELECT stage_name FROM stages;");
+    if (stagesResult.length > 0 && stagesResult.values) {
+        stagesResult.values.forEach(row => {
+            let opt = document.createElement('option');
+            opt.value = row[0]; // database lifecycle 'stage_name'
+            opt.textContent = row[0];
+            stageSelect.appendChild(opt);
+        });
+    }
+    
+    calculateTargetSettings();
+}
+
+// MAIN EVENT LOADER: Standard DOMContentLoaded fires instantly, rendering UI elements immediately
+document.addEventListener("DOMContentLoaded", async () => {
+    initHourDropdown();
+    autoDetectTz();
+    requestDeviceLocation(false);
+    
+    const statusDiv = document.getElementById('status');
+    const logDiv = document.getElementById('dataLog');
+    
+    try {
+        statusDiv.innerText = "Status: Linking WebAssembly Modules...";
+        
+        // Point locateFile directly to the jsDelivr directory
+        const config = { 
+            locateFile: filename => `https://jsdelivr.net{filename}` 
+        };
+        
+        const SQL = await initSqlJs(config);
+        statusDiv.innerText = "Status: Fetching plants_database.db File...";
+        
+        const response = await fetch('plants_database.db');
+        if (!response.ok) throw new Error("File plants_database.db not found in active directory path.");
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const uInt8Array = new Uint8Array(arrayBuffer);
+        
+        db = new SQL.Database(uInt8Array);
+        statusDiv.innerText = "Status: System Ready. Connect to Hardware.";
+        
+        populateDropdowns();
+    } catch (error) {
+        console.error(error);
+        statusDiv.innerText = "Database Error: Loading Blocked";
+        statusDiv.style.color = "red";
+        logDiv.innerHTML += `❌ Initialization Error: ${error.message}<br>`;
+    }
+});
+
+function calculateTargetSettings() {
+    if (!db) return;
+    
+    const plantId = document.getElementById('plantSelect').value;
+    const stageName = document.getElementById('stageSelect').value;
+    const previewDiv = document.getElementById('preview');
+    
+    if (!plantId || !stageName) return;
+
+    const plantStmt = db.prepare("SELECT name, type, min_dli, max_dli FROM plants WHERE id = :id");
+    const plantData = plantStmt.getAsObject({':id': plantId});
+    plantStmt.free();
+
+    const stageStmt = db.prepare("SELECT photoperiod FROM stages WHERE stage_name = :stage");
+    const stageData = stageStmt.getAsObject({':stage': stageName});
+    stageStmt.free();
+
+    let finalPhotoperiod = stageData.photoperiod;
+    
+    // Fallback rule if photoperiod is null (e.g., 'Mature/Active/Default')
+    if (finalPhotoperiod === null || finalPhotoperiod === undefined) {
+        const typeStmt = db.prepare("SELECT photoperiod FROM types WHERE type_name = :type");
+        const typeData = typeStmt.getAsObject({':type': plantData.type});
+        typeStmt.free();
+        finalPhotoperiod = typeData.photoperiod || 12;
+    }
+
+    // Determine scale percentage reduction rules based on precise structural conditions
+    let reductionPercentage = 0;
+    const pType = plantData.type ? plantData.type.toLowerCase() : "";
+
+    if (pType.includes("fruit") || pType.includes("vegetable")) {
+        reductionPercentage = 64.0;
+    } else if (pType.includes("leafy") || pType.includes("green")) {
+        reductionPercentage = 48.5;
+    } else if (pType.includes("herb")) {
+        reductionPercentage = 41.5;
+    } else if (pType.includes("houseplant") || pType.includes("cactus") || pType.includes("succulent")) {
+        reductionPercentage = 38.3; // Updated ratio metric specification
+    } else if (pType.includes("flower") || pType.includes("shade")) {
+        reductionPercentage = 36.8; // Updated ratio metric specification
+    }
+
+    let activeReduction = 0;
+    if (stageName.toLowerCase() === "seedling") {
+        activeReduction = reductionPercentage;
+    } else if (stageName.toLowerCase() === "vegetative") {
+        activeReduction = reductionPercentage / 2;
+    }
+
+    let calculatedMinDli = Math.round(plantData.min_dli * (1 - (activeReduction / 100)));
+    let calculatedMaxDli = Math.round(plantData.max_dli * (1 - (activeReduction / 100)));
+
+    // Read form inputs; fall back to system variables if left empty
+    const userLat = document.getElementById('latitude').value;
+    const userLong = document.getElementById('longitude').value;
+    const userTz = document.getElementById('timezone').value;
+
+    const finalLat = userLat !== "" ? parseFloat(userLat) : parseFloat(autoLat.toFixed(4));
+    const finalLong = userLong !== "" ? parseFloat(userLong) : parseFloat(autoLong.toFixed(4));
+    const finalTz = userTz !== "" ? userTz : autoTz;
+
+    finalPayload = {
+        ssid: document.getElementById('wifiSsid').value,
+        pass: document.getElementById('wifiPass').value,
+        key: document.getElementById('weatherKey').value,
+        startHour: parseInt(document.getElementById('startHour').value) || 0,
+        lat: isNaN(finalLat) ? 0.0 : finalLat,
+        long: isNaN(finalLong) ? 0.0 : finalLong,
+        tz: finalTz,
+        plant: plantData.name,
+        type: plantData.type,
+        min_dli: calculatedMinDli,
+        max_dli: calculatedMaxDli
+    };
+
+    previewDiv.innerText = JSON.stringify(finalPayload, null, 2);
+}
+
+// Web Bluetooth Logic Handlers
+async function connectBLE() {
+    const statusDiv = document.getElementById('status');
+    const logDiv = document.getElementById('dataLog');
+    statusDiv.innerText = "Status: Scanning for ESP32 Link...";
+    
+    try {
+        bleDevice = await navigator.bluetooth.requestDevice({ 
+            filters: [{ services: [SERVICE_UUID] }] 
+        });
+        
+        const server = await bleDevice.gatt.connect();
+        statusDiv.innerText = "Status: Bluetooth Connected!";
+        statusDiv.style.color = "green";
+        document.getElementById('syncBtn').disabled = false;
+
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        
+        logDiv.innerHTML += `Connected to peripheral device profiles stream.<br>`;
+    } catch (error) {
+        console.error(error);
+        statusDiv.innerText = "Status: Bluetooth Hook Connection Failed";
+        statusDiv.style.color = "red";
+        logDiv.innerHTML += `Connection error matrix: ${error.message}<br>`;
+    }
+}
+
+async function syncToESP32() {
+    const logDiv = document.getElementById('dataLog');
+    if (!bleCharacteristic || !finalPayload) {
+        logDiv.innerHTML += `⚠️ System not ready. Ensure Bluetooth channel is configured.<br>`;
+        return;
+    }
+
+    try {
+        const jsonString = JSON.stringify(finalPayload);
+        const encoder = new TextEncoder();
+        const dataBuffer = encoder.encode(jsonString);
+        
+        const totalBytes = dataBuffer.byteLength;
+        logDiv.innerHTML += `Preparing transmission sequence packet: ${totalBytes} bytes total...<br>`;
+
+        const CHUNK_SIZE = 20;
+        let offset = 0;
+
+        while (offset < totalBytes) {
+            const chunk = dataBuffer.slice(offset, offset + CHUNK_SIZE);
+            await bleCharacteristic.writeValueWithResponse(chunk);
+            offset += CHUNK_SIZE;
+            logDiv.innerHTML += `Sent processing milestone block: ${Math.min(offset, totalBytes)} of ${totalBytes} bytes...<br>`;
+        }
+        
+        logDiv.innerHTML += `✅ Data synchronized to flash memory successfully!<br>`;
+    } catch (error) {
+        console.error(error);
+        logDiv.innerHTML += `❌ Transmission cycle runtime fault: ${error.message}<br>`;
+    }
+}
+
+function disconnectBLE() {
+    if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+        document.getElementById('status').innerText = "Status: Disconnected";
+        document.getElementById('status').style.color = "black";
+        document.getElementById('syncBtn').disabled = true;
+        document.getElementById('dataLog').innerHTML += "Connection closed by user configuration.<br>";
+    }
+}
+</script>
+</body>
+</html>
