@@ -299,7 +299,8 @@ function calculateTargetSettings() {
         plant: plantData.name,
         type: plantData.type,
         min_dli: calculatedMinDli,
-        max_dli: calculatedMaxDli
+        max_dli: calculatedMaxDli,
+        photoperiod: finalPhotoperiod
     };
 
     previewDiv.innerText = JSON.stringify(finalPayload, null, 2);
