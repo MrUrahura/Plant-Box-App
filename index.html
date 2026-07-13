@@ -6,7 +6,7 @@
     <title>ESP32 Controller & Plant Sync</title>
     
     <!-- Use a direct synchronous link to prevent loading blocks on separate devices -->
-    <script src="https://jsdelivr.net"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
     
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #f0f2f5; color: #333; }
@@ -116,6 +116,7 @@ function initHourDropdown() {
 function autoDetectTz() {
     try {
         autoTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        document.getElementById("timezone").value = autoTz;
     } catch(e) {
         console.error("Failed to read device timezone metadata", e);
     }
@@ -131,6 +132,13 @@ function requestDeviceLocation(isManualClick = false) {
                 if (isManualClick) {
                     logDiv.innerHTML += "✅ Automated background GPS parameters synced.<br>";
                 }
+
+                autoLat = position.coords.latitude;
+                autoLong = position.coords.longitude;
+
+                document.getElementById("latitude").value = autoLat.toFixed(6);
+                document.getElementById("longitude").value = autoLong.toFixed(6);
+
                 calculateTargetSettings();
             },
             (error) => {
@@ -150,8 +158,8 @@ function populateDropdowns() {
     stageSelect.innerHTML = "";
 
     const plantsResult = db.exec("SELECT id, name FROM plants ORDER BY name ASC;");
-    if (plantsResult.length > 0 && plantsResult.values) {
-        plantsResult.values.forEach(row => {
+    if (plantsResult.length > 0) {
+        plantsResult[0].values.forEach(row => {
             let opt = document.createElement('option');
             opt.value = row[0]; // database 'id' integer key
             opt.textContent = row[1]; // database 'name' string
@@ -160,8 +168,8 @@ function populateDropdowns() {
     }
 
     const stagesResult = db.exec("SELECT stage_name FROM stages;");
-    if (stagesResult.length > 0 && stagesResult.values) {
-        stagesResult.values.forEach(row => {
+    if (stagesResult.length > 0) {
+        stagesResult[0].values.forEach(row => {
             let opt = document.createElement('option');
             opt.value = row[0]; // database lifecycle 'stage_name'
             opt.textContent = row[0];
@@ -186,7 +194,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         // Point locateFile directly to the jsDelivr directory
         const config = { 
-            locateFile: filename => `https://jsdelivr.net{filename}` 
+            locateFile: filename => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${filename}`
         };
         
         const SQL = await initSqlJs(config);
