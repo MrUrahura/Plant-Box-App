@@ -90,8 +90,8 @@
     </div>
 
 <script>
-const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+const SERVICE_UUID = "3ffb09d6-6ba2-4d32-bc92-cbdaf9798ffa";
+const CHARACTERISTIC_UUID = "0dddf571-257c-4021-964b-a6fd9212384f";
 
 let db = null;
 let bleDevice = null;
@@ -291,16 +291,16 @@ function calculateTargetSettings() {
     finalPayload = {
         ssid: document.getElementById('wifiSsid').value,
         pass: document.getElementById('wifiPass').value,
-        key: document.getElementById('weatherKey').value,
+        apiKey: document.getElementById('weatherKey').value,
         startHour: parseInt(document.getElementById('startHour').value) || 0,
         lat: isNaN(finalLat) ? 0.0 : finalLat,
-        long: isNaN(finalLong) ? 0.0 : finalLong,
+        lng: isNaN(finalLong) ? 0.0 : finalLong,
         tz: finalTz,
-        plant: plantData.name,
-        type: plantData.type,
-        min_dli: calculatedMinDli,
-        max_dli: calculatedMaxDli,
-        photoperiod: finalPhotoperiod
+        pName: plantData.name,
+        pType: plantData.type,
+        minDLI: calculatedMinDli,
+        maxDLI: calculatedMaxDli,
+        photo: finalPhotoperiod
     };
 
     previewDiv.innerText = JSON.stringify(finalPayload, null, 2);
