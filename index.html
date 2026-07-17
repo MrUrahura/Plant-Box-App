@@ -373,9 +373,10 @@ async function syncToESP32() {
 
         while (offset < totalBytes) {
             const chunk = dataBuffer.slice(offset, offset + CHUNK_SIZE);
-            await bleCharacteristic.writeValueWithResponse(chunk);
+            await bleCharacteristic.writeValueWithoutResponse(chunk);
             offset += CHUNK_SIZE;
             logDiv.innerHTML += `Sent processing milestone block: ${Math.min(offset, totalBytes)} of ${totalBytes} bytes...<br>`;
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
         
         logDiv.innerHTML += `✅ Data synchronized to flash memory successfully!<br>`;
