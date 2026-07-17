@@ -323,7 +323,28 @@ async function connectBLE() {
 
         const service = await server.getPrimaryService(SERVICE_UUID);
         bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-        
+
+        // Read current ESP32 settings
+        const value = await bleCharacteristic.readValue();
+        const decoder = new TextDecoder();
+        const json = decoder.decode(value);
+        const settings = JSON.parse(json);
+        console.log(settings);
+
+        // Fill input boxes
+        document.getElementById("wifiSsid").value = settings.ssid || "";
+        document.getElementById("wifiPass").value = settings.pass || "";
+        document.getElementById("weatherKey").value = settings.apiKey || "";
+
+        document.getElementById("latitude").value = settings.lat || "";
+        document.getElementById("longitude").value = settings.lng || "";
+
+        document.getElementById("timezone").value = settings.tz || "";
+        document.getElementById("startHour").value = settings.startHour ?? 0;
+
+        // Update the payload preview after filling values
+        calculateTargetSettings();
+
         logDiv.innerHTML += `Connected to peripheral device profiles stream.<br>`;
     } catch (error) {
         console.error(error);
